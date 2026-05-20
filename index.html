@@ -171,10 +171,12 @@
                     totalClaim += claimVal;
                     totalPaid += paidVal;
                     
-                    // สมมติว่าในฟิลด์ status หรือ remark มีคำว่า "C" ถือว่าเป็นเคสติด C
-                    const isErrorC = (item.remark && item.remark.toUpperCase().includes("C")) || (item.status && item.status.toUpperCase().includes("C"));
+                    // เช็คว่าในฟิลด์ status หรือ remark มีคำว่า "C" หรือไม่
+                    const statusStr = item.status ? String(item.status).toUpperCase() : "";
+                    const remarkStr = item.remark ? String(item.remark).toUpperCase() : "";
+                    const isErrorC = remarkStr.includes("C") || statusStr.includes("C") || statusStr.includes("ติด C");
                     
-                    if (item.status && item.status.includes("ได้รับชดเชยแล้ว")) {
+                    if (statusStr.includes("ได้รับชดเชยแล้ว")) {
                         successCount++;
                     } else if (isErrorC) {
                         errorCCount++;
@@ -194,11 +196,12 @@
                 mockData.forEach(item => {
                     if (!item.date) return;
                     
-                    const parts = item.date.split('/'); // คาดหวังรูปแบบ DD/MM/YYYY
+                    const parts = item.date.split('/'); // คาดหวังรูปแบบ DD/MM/YYYY หรือ D/M/YYYY
                     if (parts.length === 3) {
                         const mIdx = parseInt(parts[1]) - 1;
                         let year = parts[2];
-                        // แปลง ค.ศ. เป็น พ.ศ. แบบย่อ (ถ้าเป็น ค.ศ. ให้ +543 แล้วเอา 2 ตัวหลัง หรือถ้าเป็น พ.ศ. อยู่แล้วก็เอา 2 ตัวหลังเลย)
+                        
+                        // แปลง ค.ศ. เป็น พ.ศ. แบบย่อ
                         if (year.length === 4) {
                             const y = parseInt(year);
                             const thaiYear = y < 2500 ? y + 543 : y; 
@@ -208,7 +211,8 @@
                         const label = mIdx >= 0 && mIdx < 12 ? `${monthNames[mIdx]} ${year}` : `${parts[1]}/${year}`;
                         
                         // ใช้ปี-เดือน (YYYY-MM) เป็น key สำหรับการ Sort ลำดับเวลาให้ถูกต้อง
-                        const sortKey = `${parts[2]}-${parts[1].padStart(2, '0')}`;
+                        const monthKey = parts[1].padStart(2, '0');
+                        const sortKey = `${parts[2]}-${monthKey}`;
                         
                         if (!grouped[sortKey]) grouped[sortKey] = { sortKey, name: label, 'ขอเบิก (บาท)': 0, 'ชดเชย (บาท)': 0 };
                         grouped[sortKey]['ขอเบิก (บาท)'] += parseFloat(item.claim) || 0;
@@ -417,7 +421,7 @@
                         </div>
                     </div>
 
-                    {/* กราฟ (Charts) แทนที่ตาราง */}
+                    {/* กราฟ (Charts) */}
                     <div className="bg-white rounded-2xl shadow-card overflow-hidden border border-slate-100/50 mt-8">
                         <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
                             <h3 className="text-lg font-bold text-slate-800 flex items-center">
@@ -612,7 +616,7 @@
                                                 <tbody className="divide-y divide-slate-100">
                                                     {filteredData.map((row, idx) => {
                                                         const isSuccess = row.status && row.status.includes('ได้รับชดเชยแล้ว');
-                                                        const isErrorC = (row.remark && row.remark.toUpperCase().includes("C")) || (row.status && row.status.toUpperCase().includes("C"));
+                                                        const isErrorC = (row.remark && row.remark.toUpperCase().includes("C")) || (row.status && row.status.toUpperCase().includes("C")) || (row.status && row.status.includes("ติด C"));
 
                                                         return(
                                                         <tr key={idx} className="hover:bg-slate-50 transition-colors">
@@ -737,7 +741,7 @@
                                         <li>กดปุ่ม <b className="text-blue-600">การทำให้ใช้งานได้ (Deploy)</b> ที่มุมขวาบน</li>
                                         <li>เลือก <b className="text-blue-600">การทำให้ใช้งานได้รายการใหม่</b></li>
                                         <li>ตรง <b>"ผู้มีสิทธิ์เข้าถึง (Who has access)"</b> ต้องเปลี่ยนเป็น <b className="text-red-500 underline">ทุกคน (Anyone)</b> เท่านั้น</li>
-                                        <li>กด Deploy นำ URL ใหม่มาอัปเดตในโค้ด</li>
+                                        <li>ระบบจะให้ URL ใหม่มา ให้นำมาแทนที่ในโค้ดอีกครั้ง</li>
                                     </ol>
                                     
                                     <button onClick={() => window.location.reload()} className="px-6 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 font-medium transition-colors text-sm">
