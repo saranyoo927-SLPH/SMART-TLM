@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TLM Claim Dashboard - รพ.เสลภูมิ</title>
+    
+    <!-- นำเข้า Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- นำเข้า FontAwesome สำหรับ Icon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- นำเข้า React และ ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- นำเข้า Babel สำหรับคอมไพล์ JSX ในหน้าเว็บ -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { font-family: 'Sarabun', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // ==========================================
+        // 🟢 อัปเดต URL ของ Web App จาก Google Apps Script เรียบร้อยแล้ว
+        // ==========================================
+        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx0PKi_rileifhE0y-43sTRfPbY0Ok9nyqowcGwF1Tiveplfr2LGg1ttc-TFiPNuXeU/exec"; 
+        
+        function App() {
+            const [currentView, setCurrentView] = useState('dashboard');
+            const [isAdmin, setIsAdmin] = useState(false);
+            
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [loginError, setLoginError] = useState('');
+            const [searchQuery, setSearchQuery] = useState('');
+
+            // Data State
+            const [mockData, setMockData] = useState([]);
+            const [mockStatement, setMockStatement] = useState([]);
+            const [isLoading, setIsLoading] = useState(true);
+            const [fetchError, setFetchError] = useState('');
+
+            // โหลดข้อมูลจาก GAS เมื่อเปิดหน้าเว็บ
+            useEffect(() => {
+                const fetchData = async () => {
+                    try {
+                        if (GAS_API_URL === "นำ_WEB_APP_URL_จาก_GAS_มาวางที่นี่") {
+                            throw new Error("กรุณาใส่ URL ของ Google Apps Script ก่อนใช้งาน");
+                        }
+                        
+                        const response = await fetch(GAS_API_URL);
+                        const result = await response.json();
+                        
+                        setMockData(result.data || []);
+                        setMockStatement(result.statement || []);
+                        setIsLoading(false);
+                    } catch (error) {
+                        console.error("Error fetching data:", error);
+                        setFetchError(error.message || "ไม่สามารถดึงข้อมูลได้ กรุณาตรวจสอบการตั้งค่า GAS");
+                        setIsLoading(false);
+                    }
+                };
+
+                fetchData();
+            }, []);
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if (username === 'admin' && password === '1234') {
+                    setIsAdmin(true);
+                    setCurrentView('individual-check');
+                    setLoginError('');
+                } else {
+                    setLoginError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+                }
+            };
+
+            const handleLogout = () => {
+                setIsAdmin(false);
+                setCurrentView('dashboard');
+                setUsername('');
+                setPassword('');
+                setSearchQuery('');
+            };
+
+            const formatCurrency = (amount) => {
+                return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount || 0);
+            };
+
+            const dashboardStats = useMemo(() => {
+                const totalRecords = mockData.length;
+                let totalClaim = 0;
+                let totalPaid = 0;
+                let successCount = 0;
+                let pendingCount = 0;
+
+                mockData.forEach(item => {
+                    totalClaim += item.claim || 0;
+                    totalPaid += item.paid || 0;
+                    if (item.status && item.status.includes("ได้รับชดเชยแล้ว")) successCount++;
+                    if (item.status && (item.status.includes("ยังไม่ได้รับชดเชย") || item.status.includes("รอ"))) pendingCount++;
+                });
+
+                return { totalRecords, totalClaim, totalPaid, successCount, pendingCount };
+            }, [mockData]);
+
+            // UI Components
+            const renderNavbar = () => (
+                <nav className="bg-blue-900 text-white shadow-md">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="flex justify-between h-16">
+                            <div className="flex items-center">
+                                <i className="fa-solid fa-heart-pulse text-blue-300 text-2xl mr-3"></i>
+                                <span className="font-bold text-xl tracking-wide">TLM Claim <span className="text-sm font-normal text-blue-300 ml-2 hidden sm:inline-block">รพ.เสลภูมิ</span></span>
+                            </div>
+                            <div className="flex items-center space-x-2 sm:space-x-4">
+                                <button 
+                                    onClick={() => setCurrentView('dashboard')}
+                                    className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${currentView === 'dashboard' ? 'bg-blue-800 text-white' : 'text-blue-200 hover:bg-blue-700 hover:text-white'}`}
+                                >
+                                    <i className="fa-solid fa-chart-pie mr-2"></i> <span className="hidden sm:inline">ภาพรวม</span>
+                                </button>
+                                
+                                {isAdmin ? (
+                                    <>
+                                        <button 
+                                            onClick={() => setCurrentView('individual-check')}
+                                            className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${currentView === 'individual-check' ? 'bg-blue-800 text-white' : 'text-blue-200 hover:bg-blue-700 hover:text-white'}`}
+                                        >
+                                            <i className="fa-solid fa-search mr-2"></i> <span className="hidden sm:inline">ตรวจสอบรายบุคคล</span>
+                                        </button>
+                                        <button 
+                                            onClick={handleLogout}
+                                            className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-red-300 hover:bg-red-900/50 transition-colors"
+                                        >
+                                            <i className="fa-solid fa-sign-out-alt mr-2"></i> <span className="hidden sm:inline">ออก</span>
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button 
+                                        onClick={() => setCurrentView('admin-login')}
+                                        className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${currentView === 'admin-login' ? 'bg-blue-800 text-white' : 'bg-blue-700 text-white hover:bg-blue-600'}`}
+                                    >
+                                        <i className="fa-solid fa-shield-halved mr-2"></i> <span>Admin</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </nav>
+            );
+
+            const renderDashboard = () => (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">รายงานภาพรวมข้อมูลการเบิกจ่าย (ธาลัสซีเมีย)</h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 border-l-4 border-l-blue-500">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500 mb-1">ยอดขอเบิกทั้งหมด (Summary)</p>
+                                    <h3 className="text-2xl font-bold text-gray-900">{formatCurrency(dashboardStats.totalClaim)}</h3>
+                                </div>
+                                <div className="p-2 bg-blue-50 rounded-lg">
+                                    <i className="fa-solid fa-arrow-trend-up text-blue-500 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 border-l-4 border-l-green-500">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500 mb-1">ยอดจ่ายชดเชยแล้ว (Summary)</p>
+                                    <h3 className="text-2xl font-bold text-gray-900">{formatCurrency(dashboardStats.totalPaid)}</h3>
+                                </div>
+                                <div className="p-2 bg-green-50 rounded-lg">
+                                    <i className="fa-solid fa-credit-card text-green-500 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 border-l-4 border-l-emerald-500">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500 mb-1">ได้รับชดเชยแล้ว</p>
+                                    <h3 className="text-2xl font-bold text-gray-900">{dashboardStats.successCount} <span className="text-sm font-normal text-gray-500">รายการ</span></h3>
+                                </div>
+                                <div className="p-2 bg-emerald-50 rounded-lg">
+                                    <i className="fa-solid fa-check-circle text-emerald-500 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 border-l-4 border-l-amber-500">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500 mb-1">รอการชดเชย / ติด C</p>
+                                    <h3 className="text-2xl font-bold text-gray-900">{dashboardStats.pendingCount} <span className="text-sm font-normal text-gray-500">รายการ</span></h3>
+                                </div>
+                                <div className="p-2 bg-amber-50 rounded-lg">
+                                    <i className="fa-solid fa-exclamation-circle text-amber-500 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                            <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                                <i className="fa-solid fa-file-alt mr-2 text-gray-500"></i> รายการเข้ารับบริการ (ดึงข้อมูล 10 รายการแรก)
+                            </h3>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชื่อ - นามสกุล</th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">ขอเบิก</th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">ชดเชย</th>
+                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {mockData.slice(0, 10).map((row, idx) => (
+                                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{row.date}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.name}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatCurrency(row.claim)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-medium">{formatCurrency(row.paid)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                                                <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                                    (row.status && row.status.includes('ได้รับชดเชยแล้ว')) ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                                                }`}>
+                                                    {row.status || '-'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {mockData.length === 0 && (
+                                        <tr>
+                                            <td colSpan="5" className="px-6 py-8 text-center text-gray-500">ไม่พบข้อมูล หรือกำลังดึงข้อมูล</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            const renderLogin = () => (
+                <div className="flex items-center justify-center min-h-[60vh]">
+                    <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
+                        <div className="text-center mb-8">
+                            <div className="mx-auto bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mb-4">
+                                <i className="fa-solid fa-shield-halved text-blue-600 text-2xl"></i>
+                            </div>
+                            <h2 className="text-2xl font-bold text-gray-900">ผู้ดูแลระบบ (Admin)</h2>
+                            <p className="text-sm text-gray-500 mt-2">เข้าสู่ระบบเพื่อใช้งานเมนูตรวจสอบรายบุคคล</p>
+                        </div>
+
+                        <form onSubmit={handleLogin} className="space-y-6">
+                            {loginError && (
+                                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm flex items-center">
+                                    <i className="fa-solid fa-exclamation-circle mr-2"></i> {loginError}
+                                </div>
+                            )}
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อผู้ใช้งาน (Username)</label>
+                                <input 
+                                    type="text" 
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                                    placeholder="admin"
+                                    required
+                                />
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน (Password)</label>
+                                <input 
+                                    type="password" 
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                                    placeholder="••••"
+                                    required
+                                />
+                            </div>
+
+                            <button 
+                                type="submit" 
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors flex justify-center items-center"
+                            >
+                                เข้าสู่ระบบ
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+
+            const renderIndividualCheck = () => {
+                const filteredData = mockData.filter(item => 
+                    (item.cid && item.cid.includes(searchQuery)) || (item.name && item.name.includes(searchQuery))
+                );
+                
+                const filteredStatement = mockStatement.filter(item => 
+                    (item.cid && item.cid.includes(searchQuery)) || (item.name && item.name.includes(searchQuery))
+                );
+
+                const hasSearched = searchQuery.length > 2;
+
+                return (
+                    <div className="space-y-6">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                                <i className="fa-solid fa-search text-blue-600 mr-2"></i> ตรวจสอบการเบิกจ่ายชดเชยรายบุคคล
+                            </h2>
+                            
+                            <div className="relative max-w-2xl">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i className="fa-solid fa-search text-gray-400"></i>
+                                </div>
+                                <input
+                                    type="text"
+                                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all shadow-sm"
+                                    placeholder="ค้นหาด้วย เลขบัตรประชาชน (CID) หรือ ชื่อ-นามสกุล..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+                            <p className="mt-2 text-sm text-gray-500">
+                                *พิมพ์ชื่อ เช่น "เข็มจิราณ์" หรือกรอกเลข CID อย่างน้อย 3 ตัวอักษร
+                            </p>
+                        </div>
+
+                        {hasSearched && (
+                            <div className="grid grid-cols-1 gap-6">
+                                {/* ตาราง Summary */}
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                    <div className="px-6 py-4 border-b border-gray-100 bg-blue-50/50 flex justify-between items-center">
+                                        <h3 className="text-lg font-semibold text-blue-900 flex items-center">
+                                            <i className="fa-solid fa-user-circle mr-2 text-blue-600"></i> ข้อมูลจากไฟล์ Data (Summary)
+                                        </h3>
+                                    </div>
+                                    
+                                    {filteredData.length > 0 ? (
+                                        <div className="overflow-x-auto">
+                                            <table className="min-w-full divide-y divide-gray-200">
+                                                <thead className="bg-gray-50">
+                                                    <tr>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CID</th>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชื่อ - นามสกุล</th>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่เข้ารับบริการ</th>
+                                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">ขอเบิก</th>
+                                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">ชดเชย</th>
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                    {filteredData.map((row, idx) => (
+                                                        <tr key={idx} className="hover:bg-gray-50">
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.cid}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.name}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{row.date}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatCurrency(row.claim)}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-medium">{formatCurrency(row.paid)}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                                                                <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                                                    (row.status && row.status.includes('ได้รับชดเชยแล้ว')) ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                                                                }`}>
+                                                                    {row.status}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <div className="p-8 text-center text-gray-500">ไม่พบข้อมูลการเบิกจ่ายสำหรับคำค้นหานี้</div>
+                                    )}
+                                </div>
+
+                                {/* ตาราง Statement */}
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                    <div className="px-6 py-4 border-b border-gray-100 bg-emerald-50/50 flex justify-between items-center">
+                                        <h3 className="text-lg font-semibold text-emerald-900 flex items-center">
+                                            <i className="fa-solid fa-file-invoice-dollar mr-2 text-emerald-600"></i> รายละเอียดจากไฟล์ Statement
+                                        </h3>
+                                    </div>
+                                    
+                                    {filteredStatement.length > 0 ? (
+                                        <div className="overflow-x-auto">
+                                            <table className="min-w-full divide-y divide-gray-200">
+                                                <thead className="bg-gray-50">
+                                                    <tr>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rep No. (งวด)</th>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่เข้ารับบริการ</th>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สิทธิ์</th>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">รายการที่ขอเบิก</th>
+                                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">จำนวนเงินขอเบิก</th>
+                                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">จ่ายชดเชยสุทธิ</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                    {filteredStatement.map((row, idx) => (
+                                                        <tr key={idx} className="hover:bg-gray-50">
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{row.repNo}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{row.date}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                                <span className="px-2 py-1 bg-gray-100 rounded text-xs border border-gray-200">{row.right}</span>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title={row.item}>{row.item}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatCurrency(row.claim)}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-green-600 font-bold">{formatCurrency(row.paid)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <div className="p-8 text-center text-gray-500">ไม่พบข้อมูล Statement สำหรับคำค้นหานี้ (อาจยังไม่มีการโอนเงิน)</div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            return (
+                <div className="min-h-screen pb-10">
+                    {renderNavbar()}
+                    
+                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        {isLoading ? (
+                            <div className="flex flex-col items-center justify-center min-h-[50vh]">
+                                <div className="loader mb-4"></div>
+                                <p className="text-gray-500">กำลังเชื่อมต่อข้อมูลจาก Google Sheets...</p>
+                            </div>
+                        ) : fetchError ? (
+                            <div className="bg-red-50 text-red-600 p-6 rounded-xl border border-red-200 text-center max-w-2xl mx-auto mt-10">
+                                <i className="fa-solid fa-triangle-exclamation text-4xl mb-4"></i>
+                                <h3 className="text-lg font-bold mb-2">เกิดข้อผิดพลาดในการโหลดข้อมูล</h3>
+                                <p>{fetchError}</p>
+                            </div>
+                        ) : (
+                            <>
+                                {currentView === 'dashboard' && renderDashboard()}
+                                {currentView === 'admin-login' && renderLogin()}
+                                {currentView === 'individual-check' && (
+                                    isAdmin ? renderIndividualCheck() : renderLogin()
+                                )}
+                            </>
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
