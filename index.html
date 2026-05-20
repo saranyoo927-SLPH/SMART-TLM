@@ -97,12 +97,24 @@
             const [mockStatement, setMockStatement] = useState([]);
             const [isLoading, setIsLoading] = useState(true);
             const [fetchError, setFetchError] = useState('');
+            const [isHtmlError, setIsHtmlError] = useState(false);
 
             useEffect(() => {
                 const fetchData = async () => {
                     try {
                         const response = await fetch(GAS_API_URL);
-                        const result = await response.json();
+                        
+                        // ดึงข้อมูลเป็น Text ออกมาก่อนเพื่อเช็คว่าส่งคืน JSON หรือ HTML
+                        const text = await response.text();
+                        
+                        // หากข้อความที่ส่งมาเริ่มต้นด้วย '<' (เช่น <!DOCTYPE html>) หมายความว่า GAS ไม่ได้เปิดสิทธิ์
+                        if (text.trim().startsWith('<')) {
+                            setIsHtmlError(true);
+                            throw new Error("สิทธิ์การเข้าถึง API ถูกบล็อก (ได้รับเป็นหน้าเว็บแทนข้อมูล)");
+                        }
+
+                        // ถ้าผ่าน ให้แปลงกลับเป็น JSON
+                        const result = JSON.parse(text);
                         
                         setMockData(result.data || []);
                         setMockStatement(result.statement || []);
@@ -708,6 +720,29 @@
                                 <div className="flex flex-col items-center justify-center h-full min-h-[50vh]">
                                     <div className="loader mb-4"></div>
                                     <p className="text-slate-500 font-medium text-sm animate-pulse">กำลังโหลดข้อมูล...</p>
+                                </div>
+                            ) : isHtmlError ? (
+                                <div className="bg-white p-8 rounded-2xl shadow-card border border-red-100 max-w-xl mx-auto mt-10 text-center">
+                                    <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <i className="fa-solid fa-lock text-2xl"></i>
+                                    </div>
+                                    <h3 className="text-xl font-bold text-slate-800 mb-3">ไม่สามารถเชื่อมต่อฐานข้อมูลได้!</h3>
+                                    <div className="bg-red-50 p-4 rounded-xl text-left text-sm text-red-800 font-medium leading-relaxed mb-6 border border-red-200">
+                                        ข้อผิดพลาด: ระบบตรวจสอบพบว่าลิงก์ Google Apps Script ส่งกลับมาเป็น "หน้าเว็บล็อกอิน" แทนที่จะเป็นข้อมูล (JSON) สาเหตุหลักเกิดจากลืมตั้งค่าสิทธิ์การเข้าถึงให้เป็นสาธารณะ
+                                    </div>
+                                    
+                                    <h4 className="font-bold text-slate-700 text-left mb-2">วิธีแก้ไข:</h4>
+                                    <ol className="text-left text-sm text-slate-600 space-y-2 list-decimal pl-5 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                        <li>ไปที่โปรเจกต์ Google Apps Script ของคุณ</li>
+                                        <li>กดปุ่ม <b className="text-blue-600">การทำให้ใช้งานได้ (Deploy)</b> ที่มุมขวาบน</li>
+                                        <li>เลือก <b className="text-blue-600">การทำให้ใช้งานได้รายการใหม่</b></li>
+                                        <li>ตรง <b>"ผู้มีสิทธิ์เข้าถึง (Who has access)"</b> ต้องเปลี่ยนเป็น <b className="text-red-500 underline">ทุกคน (Anyone)</b> เท่านั้น</li>
+                                        <li>กด Deploy นำ URL ใหม่มาอัปเดตในโค้ด</li>
+                                    </ol>
+                                    
+                                    <button onClick={() => window.location.reload()} className="px-6 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 font-medium transition-colors text-sm">
+                                        รีเฟรชหน้าเว็บอีกครั้ง
+                                    </button>
                                 </div>
                             ) : fetchError ? (
                                 <div className="bg-white p-8 rounded-2xl shadow-card border border-red-100 text-center max-w-xl mx-auto mt-10">
