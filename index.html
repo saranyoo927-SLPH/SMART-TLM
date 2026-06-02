@@ -233,7 +233,7 @@
                 
                 // แปลงเป็น Array และเรียงลำดับตามเวลา จากเก่าไปใหม่ (และดึงมาเฉพาะ 12 เดือนล่าสุด)
                 const sorted = Object.values(grouped).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-                return sorted.slice;
+                 return sorted;
             }, [mockData]);
 
             // ==========================================
