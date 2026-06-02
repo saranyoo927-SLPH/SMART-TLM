@@ -432,7 +432,7 @@
                         </div>
                     </div>
 
-                    {/* กราฟสถิติ และ สรุปหมวดหมู่ข้อมูลคอลัมน์ L */}
+              {/* กราฟสถิติ และ สรุปหมวดหมู่ข้อมูลคอลัมน์ L */}
 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
     
     {/* ฝั่งซ้าย: กราฟแท่งรายเดือน (ใช้พื้นที่ 2 ส่วนจาก 3 ส่วน) */}
@@ -443,7 +443,7 @@
             </h3>
         </div>
         <div className="p-6">
-            {chartData.length > 0 ? (
+            {chartData && chartData.length > 0 ? (
                 <div className="h-80 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={chartData} margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
@@ -474,7 +474,8 @@
             </h3>
         </div>
         <div className="p-6 flex-1 overflow-y-auto space-y-5" style={{ maxHeight: '320px' }}>
-            {dashboardStats.totalRecords > 0 && Object.keys(dashboardStats.groupLCounts).length > 0 ? (
+            {/* 🟢 จุดนี้ที่เพิ่มการเช็คค่าว่างเพื่อป้องกัน Error */}
+            {dashboardStats && dashboardStats.groupLCounts && Object.keys(dashboardStats.groupLCounts).length > 0 ? (
                 Object.entries(dashboardStats.groupLCounts)
                     .sort((a, b) => b[1] - a[1]) // เรียงลำดับจากหมวดหมู่ที่มีจำนวนมากที่สุดลงไป
                     .map(([key, value]) => {
@@ -494,7 +495,7 @@
             ) : (
                 <div className="flex flex-col items-center justify-center h-full text-slate-400 py-10">
                     <i className="fa-solid fa-folder-open text-4xl mb-3 text-slate-200"></i>
-                    <p className="text-sm">ไม่มีข้อมูลหมวดหมู่</p>
+                    <p className="text-sm">ไม่มีข้อมูลหมวดหมู่ (กรุณาอัปเดตฟังก์ชัน dashboardStats)</p>
                 </div>
             )}
         </div>
