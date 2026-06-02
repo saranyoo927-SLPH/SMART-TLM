@@ -197,14 +197,21 @@
                 const grouped = {};
                 const monthNames = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
                 
-                mockData.forEach(item => {
-                    if (!item.date) return;
-                    
-                    const parts = item.date.split('/'); // คาดหวังรูปแบบ DD/MM/YYYY หรือ D/M/YYYY
-                    if (parts.length === 3) {
-                        const mIdx = parseInt(parts[1]) - 1;
-                        let year = parts[2];
-                        
+                     mockData.forEach(item => {
+                     // 1. เปลี่ยน item.date เป็นคีย์จริงที่คุณได้รับจาก GAS (เช่น item.vstdate)
+                     const rawDate = item.date; 
+                     if (!rawDate) return;
+    
+                    // 2. ทำให้รองรับทั้งเครื่องหมายทับ (/) และขีด (-)
+                   // โดยเปลี่ยน - ให้เป็น / ก่อนนำไป split
+                      const normalizedDate = String(rawDate).replace(/-/g, '/');
+                      const parts = normalizedDate.split('/'); 
+    
+                 if (parts.length === 3) {
+                // ส่วนจัดการ ค.ศ. / พ.ศ. ของคุณสามารถใช้โค้ดเดิมต่อไปได้เลยครับ
+                 const mIdx = parseInt(parts[1]) - 1;
+                 let year = parts[2];
+       
                         // แปลง ค.ศ. เป็น พ.ศ. แบบย่อ
                         if (year.length === 4) {
                             const y = parseInt(year);
