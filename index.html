@@ -160,38 +160,44 @@
                 return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount || 0);
             };
 
-            // คำนวณสถิติ และ แยกเคส "ติด C"
-            const dashboardStats = useMemo(() => {
-                const totalRecords = mockData.length;
-                let totalClaim = 0;
-                let totalPaid = 0;
-                let successCount = 0;
-                let pendingCount = 0;
-                let errorCCount = 0;
+// คำนวณสถิติ และ แยกเคส "ติด C" พร้อมวิเคราะห์คอลัมน์ L
+const dashboardStats = useMemo(() => {
+    const totalRecords = mockData.length;
+    let totalClaim = 0;
+    let totalPaid = 0;
+    let successCount = 0;
+    let pendingCount = 0;
+    let errorCCount = 0;
+    
+    // 🟢 สร้าง Object สำหรับเก็บยอดนับแยกตามหมวดหมู่
+    const groupLCounts = {};
 
-                mockData.forEach(item => {
-                    const claimVal = parseFloat(item.claim) || 0;
-                    const paidVal = parseFloat(item.paid) || 0;
-                    totalClaim += claimVal;
-                    totalPaid += paidVal;
-                    
-                    // เช็คว่าในฟิลด์ status หรือ remark มีคำว่า "C" หรือไม่
-                    const statusStr = item.status ? String(item.status).toUpperCase() : "";
-                    const remarkStr = item.remark ? String(item.remark).toUpperCase() : "";
-                    const isErrorC = remarkStr.includes("C") || statusStr.includes("C") || statusStr.includes("ติด C");
-                    
-                    if (statusStr.includes("ได้รับชดเชยแล้ว")) {
-                        successCount++;
-                    } else if (isErrorC) {
-                        errorCCount++;
-                    } else {
-                        pendingCount++; // สถานะอื่นๆ เช่น ยังไม่ได้รับชดเชย, รอตรวจสอบ
-                    }
-                });
+    mockData.forEach(item => {
+        const claimVal = parseFloat(item.claim) || 0;
+        const paidVal = parseFloat(item.paid) || 0;
+        totalClaim += claimVal;
+        totalPaid += paidVal;
+        
+        const statusStr = item.status ? String(item.status).toUpperCase() : "";
+        const remarkStr = item.remark ? String(item.remark).toUpperCase() : "";
+        const isErrorC = remarkStr.includes("C") || statusStr.includes("C") || statusStr.includes("ติด C");
+        
+        if (statusStr.includes("ได้รับชดเชยแล้ว")) {
+            successCount++;
+        } else if (isErrorC) {
+            errorCCount++;
+        } else {
+            pendingCount++;
+        }
 
-                return { totalRecords, totalClaim, totalPaid, successCount, pendingCount, errorCCount };
-            }, [mockData]);
+        // 🟢 ตรรกะการนับแยกกลุ่มหมวดหมู่จากคอลัมน์ L
+        // ต้องแน่ใจว่า API ส่งค่านี้มาในชื่อ groupL
+        const groupKey = item.groupL || "ไม่ระบุ";
+        groupLCounts[groupKey] = (groupLCounts[groupKey] || 0) + 1;
+    });
 
+    return { totalRecords, totalClaim, totalPaid, successCount, pendingCount, errorCCount, groupLCounts };
+}, [mockData]);
             // เตรียมข้อมูลสำหรับแสดงกราฟ (รวบรวมรายเดือน)
             const chartData = useMemo(() => {
                 const grouped = {};
