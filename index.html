@@ -247,48 +247,66 @@ const dashboardStats = useMemo(() => {
         groupLCounts
     };
 }, [mockData]);
-            // เตรียมข้อมูลสำหรับแสดงกราฟ (รวบรวมรายเดือน)
+            // เตรียมข้อมูลสำหรับแสดงกราฟและข้อมูลการรับบริการรายเดือน
             const chartData = useMemo(() => {
                 const grouped = {};
                 const monthNames = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
                 
-                     mockData.forEach(item => {
-                     // 1. เปลี่ยน item.date เป็นคีย์จริงที่คุณได้รับจาก GAS (เช่น item.vstdate)
-                     const rawDate = item.date; 
-                     if (!rawDate) return;
-    
-                    // 2. ทำให้รองรับทั้งเครื่องหมายทับ (/) และขีด (-)
-                   // โดยเปลี่ยน - ให้เป็น / ก่อนนำไป split
-                      const normalizedDate = String(rawDate).replace(/-/g, '/');
-                      const parts = normalizedDate.split('/'); 
-    
-                 if (parts.length === 3) {
-                // ส่วนจัดการ ค.ศ. / พ.ศ. ของคุณสามารถใช้โค้ดเดิมต่อไปได้เลยครับ
-                 const mIdx = parseInt(parts[1]) - 1;
-                 let year = parts[2];
-       
-                        // แปลง ค.ศ. เป็น พ.ศ. แบบย่อ
+                mockData.forEach((item, index) => {
+                    const rawDate = item.date;
+                    if (!rawDate) return;
+
+                    const normalizedDate = String(rawDate).replace(/-/g, '/');
+                    const parts = normalizedDate.split('/');
+
+                    if (parts.length === 3) {
+                        const mIdx = parseInt(parts[1], 10) - 1;
+                        let year = parts[2];
+
                         if (year.length === 4) {
-                            const y = parseInt(year);
-                            const thaiYear = y < 2500 ? y + 543 : y; 
+                            const y = parseInt(year, 10);
+                            const thaiYear = y < 2500 ? y + 543 : y;
                             year = thaiYear.toString().substring(2);
                         }
-                        
+
                         const label = mIdx >= 0 && mIdx < 12 ? `${monthNames[mIdx]} ${year}` : `${parts[1]}/${year}`;
-                        
-                        // ใช้ปี-เดือน (YYYY-MM) เป็น key สำหรับการ Sort ลำดับเวลาให้ถูกต้อง
                         const monthKey = parts[1].padStart(2, '0');
                         const sortKey = `${parts[2]}-${monthKey}`;
-                        
-                        if (!grouped[sortKey]) grouped[sortKey] = { sortKey, name: label, 'ขอเบิก (บาท)': 0, 'ชดเชย (บาท)': 0 };
-                        grouped[sortKey]['ขอเบิก (บาท)'] += parseFloat(item.claim) || 0;
-                        grouped[sortKey]['ชดเชย (บาท)'] += parseFloat(item.paid) || 0;
+                        const patientKey = String(item.cid || item.hn || item.name || `UNKNOWN-${index}`).trim();
+
+                        if (!grouped[sortKey]) {
+                            grouped[sortKey] = {
+                                sortKey,
+                                name: label,
+                                'ขอเบิก (บาท)': 0,
+                                'ชดเชย (บาท)': 0,
+                                serviceCount: 0,
+                                uniquePatientsSet: new Set()
+                            };
+                        }
+
+                        grouped[sortKey]['ขอเบิก (บาท)'] += Number.parseFloat(item.claim) || 0;
+                        grouped[sortKey]['ชดเชย (บาท)'] += Number.parseFloat(item.paid) || 0;
+                        grouped[sortKey].serviceCount += 1;
+                        grouped[sortKey].uniquePatientsSet.add(patientKey);
                     }
                 });
                 
-                // แปลงเป็น Array และเรียงลำดับตามเวลา จากเก่าไปใหม่ (และดึงมาเฉพาะ 12 เดือนล่าสุด)
-                const sorted = Object.values(grouped).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-                 return sorted;
+                return Object.values(grouped)
+                    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+                    .map((item) => {
+                        const uniquePatientCount = item.uniquePatientsSet.size;
+                        const claimRate = item['ขอเบิก (บาท)'] > 0 ? (item['ชดเชย (บาท)'] / item['ขอเบิก (บาท)']) * 100 : 0;
+                        return {
+                            sortKey: item.sortKey,
+                            name: item.name,
+                            'ขอเบิก (บาท)': item['ขอเบิก (บาท)'],
+                            'ชดเชย (บาท)': item['ชดเชย (บาท)'],
+                            serviceCount: item.serviceCount,
+                            uniquePatientCount,
+                            claimRate
+                        };
+                    });
             }, [mockData]);
 
             // ==========================================
@@ -592,18 +610,59 @@ const dashboardStats = useMemo(() => {
         </div>
         <div className="p-6">
             {chartData && chartData.length > 0 ? (
-                <div className="h-80 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chartData} margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 13, fontWeight: 500}} dy={10} />
-                            <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 13, fontWeight: 500}} tickFormatter={(value) => new Intl.NumberFormat('th-TH', { notation: "compact", compactDisplay: "short" }).format(value)} />
-                            <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)', padding: '12px 16px'}} formatter={(value) => formatCurrency(value)} />
-                            <Legend wrapperStyle={{paddingTop: '20px'}} iconType="circle" />
-                            <Bar dataKey="ขอเบิก (บาท)" fill="#cbd5e1" radius={[6, 6, 0, 0]} maxBarSize={50} />
-                            <Bar dataKey="ชดเชย (บาท)" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={50} />
-                        </BarChart>
-                    </ResponsiveContainer>
+                <div className="space-y-6">
+                    <div className="h-80 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartData} margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 13, fontWeight: 500}} dy={10} />
+                                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 13, fontWeight: 500}} tickFormatter={(value) => new Intl.NumberFormat('th-TH', { notation: "compact", compactDisplay: "short" }).format(value)} />
+                                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)', padding: '12px 16px'}} formatter={(value, name) => [formatCurrency(value), name]} />
+                                <Legend wrapperStyle={{paddingTop: '20px'}} iconType="circle" />
+                                <Bar dataKey="ขอเบิก (บาท)" fill="#cbd5e1" radius={[6, 6, 0, 0]} maxBarSize={50} />
+                                <Bar dataKey="ชดเชย (บาท)" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={50} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                            <div>
+                                <h4 className="text-base font-bold text-slate-800">ข้อมูลการรับบริการรายเดือน</h4>
+                                <p className="text-sm text-slate-500">สรุปจำนวนครั้งรับบริการ ผู้ป่วยไม่ซ้ำ และผลการชดเชยในแต่ละเดือน</p>
+                            </div>
+                            <span className="text-xs font-semibold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                                รวม {formatNumber(chartData.reduce((sum, item) => sum + item.serviceCount, 0))} ครั้งบริการ
+                            </span>
+                        </div>
+
+                        <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                            <table className="min-w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50/80 border-b border-slate-100">
+                                        <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider">เดือน</th>
+                                        <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">ครั้งบริการ</th>
+                                        <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">ผู้ป่วยไม่ซ้ำ</th>
+                                        <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">ขอเบิก</th>
+                                        <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">ชดเชย</th>
+                                        <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">อัตราชดเชย</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {chartData.map((row) => (
+                                        <tr key={row.sortKey} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-slate-700">{row.name}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-slate-600">{formatNumber(row.serviceCount)}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-slate-600">{formatNumber(row.uniquePatientCount)}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-slate-500">{formatCurrency(row['ขอเบิก (บาท)'])}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-emerald-600">{formatCurrency(row['ชดเชย (บาท)'])}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-brand-600">{formatPercent(row.claimRate)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             ) : (
                 <div className="flex flex-col items-center justify-center h-80 text-slate-400">
